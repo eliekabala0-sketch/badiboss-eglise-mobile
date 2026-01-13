@@ -9,6 +9,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/.android
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/.android
+      ANDROID_NDK_HOME: ${{ github.workspace }}/.android/ndk
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,21 +29,26 @@ jobs:
             libncurses-dev libncursesw5-dev \
             libtinfo6 cmake
 
+      - name: Prepare Android directories (permissions fix)
+        run: |
+          mkdir -p $ANDROID_HOME
+          chmod -R 777 $ANDROID_HOME
+
       - name: Upgrade pip
         run: |
           pip3 install --upgrade pip
 
-      - name: Install Buildozer and Cython
+      - name: Install Buildozer & Cython
         run: |
           pip3 install buildozer cython
 
-      - name: Initialize Buildozer (if needed)
+      - name: Accept Android licenses
         run: |
-          if [ ! -f buildozer.spec ]; then buildozer init; fi
+          yes | sdkmanager --licenses || true
 
-      - name: Build Android APK (debug)
+      - name: Build APK (debug)
         run: |
-          buildozer android debug
+          buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
