@@ -1,51 +1,61 @@
-name: "Build Android APK"
+name: Générer un APK Android
 
 on:
   push:
-    branches: ["principal"]
+    branches:
+      - principal
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-22.04
 
     steps:
-      - name: "Checkout"
-        uses: "actions/checkout@v4"
+      - name: Récupérer le code
+        uses: actions/checkout@v4
 
-      - name: "Setup Python"
-        uses: "actions/setup-python@v5"
+      - name: Installer Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      - name: "Install system deps"
+      - name: Créer un HOME utilisateur accessible
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip \
-            openjdk-17-jdk \
-            python3-pip python3-setuptools python3-wheel \
-            build-essential \
-            libffi-dev libssl-dev \
-            zlib1g-dev \
-            libncurses6 libncurses-dev \
-            autoconf automake libtool pkg-config
-
-      - name: "Install Buildozer"
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --user cython buildozer
+          mkdir -p $HOME/.local/bin
+          mkdir -p $HOME/android
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Installer dépendances système
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            zip unzip openjdk-17-jdk \
+            libncurses5 libstdc++6 \
+            zlib1g-dev libffi-dev \
+            libssl-dev build-essential \
+            autoconf automake libtool \
+            pkg-config
+
+      - name: Mettre à jour pip
+        run: python -m pip install --upgrade pip
+
+      - name: Installer Buildozer
+        run: |
+          python -m pip install --user buildozer cython
           which buildozer
           buildozer --version
 
-      - name: "Build APK (debug)"
+      - name: Configurer variables Android
         run: |
-          buildozer -v android debug
+          echo "ANDROID_HOME=$HOME/android" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android" >> $GITHUB_ENV
 
-      - name: "Upload APK artifact"
-        uses: "actions/upload-artifact@v4"
+      - name: Générer l'APK (debug)
+        run: |
+          $HOME/.local/bin/buildozer -v android debug
+
+      - name: Publier l’APK
+        uses: actions/upload-artifact@v4
         with:
-          name: "badiboss-apk"
-          path: "bin/*.apk"
-          if-no-files-found: "error"
+          name: apk-badiboss-eglise
+          path: bin/*.apk
