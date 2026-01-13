@@ -10,9 +10,18 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      # Forcer un HOME autorisé (évite /home/useruser)
+      HOME: /home/runner
+
+      # Dossiers de travail Buildozer/p4a (écriture autorisée)
+      BUILDOZER_HOME: /home/runner/.buildozer
+      P4A_STORAGE_DIR: /home/runner/.p4a
+      XDG_CONFIG_HOME: /home/runner/.config
+
+      # Android SDK installé dans le workspace
+      ANDROIDSDK: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      BUILDOZER_HOME: ${{ github.workspace }}/.buildozer
 
     steps:
       - name: Checkout
@@ -29,7 +38,7 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Install dépendances Linux
+      - name: Installer dépendances Linux
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -40,10 +49,10 @@ jobs:
             libncurses6 libncurses-dev \
             pkg-config
 
-      - name: Préparer le SDK Android (cmdline-tools + sdkmanager)
+      - name: Installer Android cmdline-tools + SDK
         run: |
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          cd "$ANDROID_SDK_ROOT"
+          mkdir -p "$ANDROIDSDK/cmdline-tools"
+          cd "$ANDROIDSDK"
 
           curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q cmdline-tools.zip -d cmdline-tools
@@ -53,17 +62,24 @@ jobs:
           mv cmdline-tools/cmdline-tools/* cmdline-tools/latest/
           rmdir cmdline-tools/cmdline-tools || true
 
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          SDKMANAGER="$ANDROIDSDK/cmdline-tools/latest/bin/sdkmanager"
           chmod +x "$SDKMANAGER"
 
-          # Installer packages de base
           yes | "$SDKMANAGER" --licenses
           "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Installer Buildozer + python-for-android
+      - name: Installer Buildozer + Cython
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade buildozer cython
+
+      - name: Vérifier variables (debug)
+        run: |
+          echo "HOME=$HOME"
+          echo "BUILDOZER_HOME=$BUILDOZER_HOME"
+          echo "P4A_STORAGE_DIR=$P4A_STORAGE_DIR"
+          echo "ANDROIDSDK=$ANDROIDSDK"
+          ls -la "$ANDROIDSDK" || true
 
       - name: Build APK (debug)
         run: |
