@@ -30,12 +30,31 @@ jobs:
             libffi-dev libssl-dev \
             libncurses6 libncurses-dev
 
-      - name: Create writable Android dirs + env
+      - name: Prepare Android + Buildozer dirs (writable)
         run: |
           mkdir -p "$HOME/android-sdk" "$HOME/.buildozer" "$HOME/.gradle"
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "BUILDOZER_GLOBAL_DIR=$HOME/.buildozer" >> $GITHUB_ENV
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Fix buildozer.spec (remove /home/useruser)
+        run: |
+          if [ -f buildozer.spec ]; then
+            # Remplace tout /home/useruser par $HOME
+            sed -i "s#/home/useruser#$HOME#g" buildozer.spec
+
+            # Force android.sdk_path vers un dossier writable
+            if grep -qE '^\s*android\.sdk_path\s*=' buildozer.spec; then
+              sed -i "s#^\s*android\.sdk_path\s*=.*#android.sdk_path = $HOME/android-sdk#g" buildozer.spec
+            else
+              echo "" >> buildozer.spec
+              echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
+            fi
+
+            # Supprime ndk_path si présent (Buildozer le gère)
+            sed -i "/^\s*android\.ndk_path\s*=/d" buildozer.spec
+          fi
 
       - name: Install Buildozer + Cython
         run: |
