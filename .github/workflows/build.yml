@@ -12,8 +12,6 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-      # Force Buildozer à travailler dans le repo (pas ailleurs)
       BUILDOZER_HOME: ${{ github.workspace }}/.buildozer
 
     steps:
@@ -35,59 +33,44 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip \
-            build-essential \
-            python3-dev \
+            git zip unzip curl \
+            build-essential python3-dev \
             libffi-dev libssl-dev \
-            libsqlite3-dev \
-            zlib1g-dev \
+            libsqlite3-dev zlib1g-dev \
             libncurses6 libncurses-dev \
-            pkg-config \
-            openjdk-17-jdk
+            pkg-config
 
-      - name: Préparer Android SDK (cmdline-tools + sdkmanager)
+      - name: Préparer le SDK Android (cmdline-tools + sdkmanager)
         run: |
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
           cd "$ANDROID_SDK_ROOT"
 
-          # Télécharger les Android command line tools officiels
           curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q cmdline-tools.zip -d cmdline-tools
           rm cmdline-tools.zip
 
-          # Mettre au bon chemin attendu : cmdline-tools/latest/...
           mkdir -p cmdline-tools/latest
           mv cmdline-tools/cmdline-tools/* cmdline-tools/latest/
           rmdir cmdline-tools/cmdline-tools || true
 
-          # Ajouter sdkmanager au PATH
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          chmod +x "$SDKMANAGER"
 
-          # Installer outils minimaux
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          # Installer packages de base
+          yes | "$SDKMANAGER" --licenses
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Installer Buildozer + python-for-android
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade buildozer cython
 
-      - name: Vérifier buildozer
-        run: |
-          which buildozer
-          buildozer --version
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-
       - name: Build APK (debug)
         run: |
-          # Nettoyage si nécessaire
           buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: apk-debug
-          path: |
-            bin/*.apk
-            *.apk
+          path: bin/*.apk
