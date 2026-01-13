@@ -9,14 +9,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      ANDROID_HOME: ${{ github.workspace }}/.android
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/.android
-      ANDROID_NDK_HOME: ${{ github.workspace }}/.android/ndk
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create writable HOME for buildozer (fix PermissionError /home/useruser)
+        run: |
+          sudo mkdir -p /home/useruser
+          sudo chown -R $USER:$USER /home/useruser
+          echo "HOME=/home/useruser" >> $GITHUB_ENV
+
+      - name: Define Android paths (inside workspace)
+        run: |
+          echo "ANDROID_HOME=${GITHUB_WORKSPACE}/.android" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=${GITHUB_WORKSPACE}/.android" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=${GITHUB_WORKSPACE}/.android/ndk" >> $GITHUB_ENV
 
       - name: Install system dependencies
         run: |
@@ -29,10 +36,10 @@ jobs:
             libncurses-dev libncursesw5-dev \
             libtinfo6 cmake
 
-      - name: Prepare Android directories (permissions fix)
+      - name: Prepare Android directories
         run: |
-          mkdir -p $ANDROID_HOME
-          chmod -R 777 $ANDROID_HOME
+          mkdir -p "${GITHUB_WORKSPACE}/.android"
+          chmod -R 777 "${GITHUB_WORKSPACE}/.android"
 
       - name: Upgrade pip
         run: |
@@ -41,10 +48,6 @@ jobs:
       - name: Install Buildozer & Cython
         run: |
           pip3 install buildozer cython
-
-      - name: Accept Android licenses
-        run: |
-          yes | sdkmanager --licenses || true
 
       - name: Build APK (debug)
         run: |
