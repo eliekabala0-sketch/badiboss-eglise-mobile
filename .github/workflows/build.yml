@@ -1,8 +1,9 @@
-name: Build Android APK
+name: Générer un APK Android
 
 on:
   push:
-    branches: [ "principal", "main" ]
+    branches:
+      - principal
   workflow_dispatch:
 
 jobs:
@@ -10,51 +11,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Récupérer le code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create writable HOME for buildozer (fix PermissionError /home/useruser)
-        run: |
-          sudo mkdir -p /home/useruser
-          sudo chown -R $USER:$USER /home/useruser
-          echo "HOME=/home/useruser" >> $GITHUB_ENV
-
-      - name: Define Android paths (inside workspace)
-        run: |
-          echo "ANDROID_HOME=${GITHUB_WORKSPACE}/.android" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=${GITHUB_WORKSPACE}/.android" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=${GITHUB_WORKSPACE}/.android/ndk" >> $GITHUB_ENV
-
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            python3 python3-pip git zip unzip \
-            openjdk-17-jdk \
-            autoconf automake libtool pkg-config \
-            libssl-dev zlib1g-dev \
-            libncurses-dev libncursesw5-dev \
-            libtinfo6 cmake
-
-      - name: Prepare Android directories
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/.android"
-          chmod -R 777 "${GITHUB_WORKSPACE}/.android"
-
-      - name: Upgrade pip
-        run: |
-          pip3 install --upgrade pip
-
-      - name: Install Buildozer & Cython
-        run: |
-          pip3 install buildozer cython
-
-      - name: Build APK (debug)
-        run: |
-          buildozer -v android debug
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      # 2. Installer Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          name: badiboss-eglise-apk
-          path: bin/*.apk
+          python-version: "3.10"
+
+      # 3. Créer un HOME accessible (évite /home/useruser)
+      - name: Préparer environnement utilisateur
+        run: |
+          mkdir -p $HOME/.local/bin
+          mkdir -p $HOME/.android
+          mkdir -p $HOME/.buildozer
+          chmod -R 777 $HOME
+          echo "HOME=$HOME"
+
+      # 4. Définir les chemins Android dans l’espace de travail
+      - name: Définir les chemins Android
+        run: |
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
+
+      # 5. Installer dépendances système nécessaires à Buildozer
+      - name: Installer les dépendances système
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            python3-pip python3-setuptools python3-wheel \
+            libncurses6 libncurses-dev \
+            libffi-dev libssl-dev \
+            build-essential \
+            autoconf automake libtool \
+            pkg-config \
+            zlib1g-dev
+
+      # 6. Mettre pip à jour
+      - name: Mise à jour pip
+        run: |
+          python -m pip install --upgrade pip
+
+      # 7. Installer Buildozer + Cython (correctement dans PATH)
+      - name: Installer Buildozer et Cython
+        run: |
+          python -m pip install --user cython buildozer
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          which buildozer
+          buildozer --version
+
+      # 8. Générer l’APK (debug)
+      - name: Générer l'APK Android (debug)
+        run: |
+          $HOME/.local/bin/buildozer -v android debug
+
+      # 9. Publier l’APK en artefact
+      - name: Télécharger l’artefact APK
