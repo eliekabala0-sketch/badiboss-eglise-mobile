@@ -1,73 +1,51 @@
-name: Générer un APK Android
+name: "Build Android APK"
 
 on:
   push:
-    branches:
-      - principal
+    branches: ["principal"]
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: "ubuntu-latest"
 
     steps:
-      # 1. Récupérer le code
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: "Checkout"
+        uses: "actions/checkout@v4"
 
-      # 2. Installer Python
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: "Setup Python"
+        uses: "actions/setup-python@v5"
         with:
           python-version: "3.10"
 
-      # 3. Créer un HOME accessible (évite /home/useruser)
-      - name: Préparer environnement utilisateur
-        run: |
-          mkdir -p $HOME/.local/bin
-          mkdir -p $HOME/.android
-          mkdir -p $HOME/.buildozer
-          chmod -R 777 $HOME
-          echo "HOME=$HOME"
-
-      # 4. Définir les chemins Android dans l’espace de travail
-      - name: Définir les chemins Android
-        run: |
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
-
-      # 5. Installer dépendances système nécessaires à Buildozer
-      - name: Installer les dépendances système
+      - name: "Install system deps"
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk \
+            git zip unzip \
+            openjdk-17-jdk \
             python3-pip python3-setuptools python3-wheel \
-            libncurses6 libncurses-dev \
-            libffi-dev libssl-dev \
             build-essential \
-            autoconf automake libtool \
-            pkg-config \
-            zlib1g-dev
+            libffi-dev libssl-dev \
+            zlib1g-dev \
+            libncurses6 libncurses-dev \
+            autoconf automake libtool pkg-config
 
-      # 6. Mettre pip à jour
-      - name: Mise à jour pip
+      - name: "Install Buildozer"
         run: |
           python -m pip install --upgrade pip
-
-      # 7. Installer Buildozer + Cython (correctement dans PATH)
-      - name: Installer Buildozer et Cython
-        run: |
           python -m pip install --user cython buildozer
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           which buildozer
           buildozer --version
 
-      # 8. Générer l’APK (debug)
-      - name: Générer l'APK Android (debug)
+      - name: "Build APK (debug)"
         run: |
-          $HOME/.local/bin/buildozer -v android debug
+          buildozer -v android debug
 
-      # 9. Publier l’APK en artefact
-      - name: Télécharger l’artefact APK
+      - name: "Upload APK artifact"
+        uses: "actions/upload-artifact@v4"
+        with:
+          name: "badiboss-apk"
+          path: "bin/*.apk"
+          if-no-files-found: "error"
