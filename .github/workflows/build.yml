@@ -1,13 +1,20 @@
-name: Generer un APK Android
+name: Générer un APK Android
 
 on:
   push:
-    branches: [ "main", "principal" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+      # Force Buildozer à travailler dans le repo (pas ailleurs)
+      BUILDOZER_HOME: ${{ github.workspace }}/.buildozer
 
     steps:
       - name: Checkout
@@ -18,77 +25,69 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system dependencies
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Install dépendances Linux
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip wget \
-            openjdk-17-jdk \
-            python3-pip python3-setuptools python3-wheel \
+            git zip unzip \
             build-essential \
-            autoconf automake libtool pkg-config \
-            zlib1g-dev libffi-dev libssl-dev \
-            libncurses6 libncurses-dev
+            python3-dev \
+            libffi-dev libssl-dev \
+            libsqlite3-dev \
+            zlib1g-dev \
+            libncurses6 libncurses-dev \
+            pkg-config \
+            openjdk-17-jdk
 
-      - name: Prepare Android SDK directories
+      - name: Préparer Android SDK (cmdline-tools + sdkmanager)
         run: |
-          mkdir -p $HOME/android-sdk
-          mkdir -p $HOME/.buildozer
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          cd "$ANDROID_SDK_ROOT"
 
-      - name: Install Android Command Line Tools (sdkmanager)
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          cd $ANDROID_SDK_ROOT/cmdline-tools
-          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q commandlinetools-linux-11076708_latest.zip
-          mv cmdline-tools latest
+          # Télécharger les Android command line tools officiels
+          curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q cmdline-tools.zip -d cmdline-tools
+          rm cmdline-tools.zip
 
-          # IMPORTANT: Buildozer/p4a cherche parfois encore tools/bin/sdkmanager
-          mkdir -p $ANDROID_SDK_ROOT/tools/bin
-          ln -sf $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
-          ln -sf $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager $ANDROID_SDK_ROOT/tools/bin/avdmanager || true
+          # Mettre au bon chemin attendu : cmdline-tools/latest/...
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/cmdline-tools/* cmdline-tools/latest/
+          rmdir cmdline-tools/cmdline-tools || true
 
+          # Ajouter sdkmanager au PATH
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/tools/bin" >> $GITHUB_PATH
 
-      - name: Accept Android licenses + install SDK packages
-        run: |
+          # Installer outils minimaux
           yes | sdkmanager --licenses
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.2"
+          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
 
-      - name: Fix buildozer.spec paths
+      - name: Installer Buildozer + python-for-android
         run: |
-          if [ -f buildozer.spec ]; then
-            # enlever chemin interdit si présent
-            sed -i "s#/home/useruser#$HOME#g" buildozer.spec
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade buildozer cython
 
-            # forcer le bon sdk path
-            if grep -q "^android.sdk_path" buildozer.spec; then
-              sed -i "s#^android\.sdk_path *=.*#android.sdk_path = $HOME/android-sdk#g" buildozer.spec
-            else
-              echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
-            fi
-          fi
-
-      - name: Install Buildozer
+      - name: Vérifier buildozer
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --user cython buildozer
           which buildozer
           buildozer --version
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
 
       - name: Build APK (debug)
         run: |
+          # Nettoyage si nécessaire
           buildozer -v android debug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apk
-          path: bin/*.apk
+          name: apk-debug
+          path: |
+            bin/*.apk
+            *.apk
